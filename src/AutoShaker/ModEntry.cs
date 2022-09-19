@@ -128,8 +128,11 @@ namespace AutoShaker
 					var location = bush.tilePosition;
 
                     if (!IsInShakeRange(playerTileLocationPoint, location, radius)) continue;
-
+                    if (_shakenBushes.Contains(bush)) continue;
                     TryShakeBush(bush);
+                }
+            }
+                    }
                 }
             }
 		}
@@ -173,7 +176,10 @@ namespace AutoShaker
 				if (_config.ToggleShaker.JustPressed())
 				{
 					_config.IsShakerActive = !_config.IsShakerActive;
-                    Task.Run(() => Helper.WriteConfig(_config)).ContinueWith((t) => this.Monitor.Log(t.Status == TaskStatus.RanToCompletion ? "Config saved successfully!" : $"Saving config unsuccessful {t.Status}"));
+					Task.Run(() => Helper.WriteConfig(_config)).ContinueWith((t) =>
+						this.Monitor.Log(t.Status == TaskStatus.RanToCompletion
+							? "Config saved successfully!"
+							: $"Saving config unsuccessful {t.Status}"));
 
 					var message = "AutoShaker has been " + (_config.IsShakerActive ? "ACTIVATED" : "DEACTIVATED");
 
