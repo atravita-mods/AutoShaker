@@ -12,46 +12,46 @@ using StardewValley.TerrainFeatures;
 
 namespace AutoShaker
 {
-	/// <summary>
-	/// The mod entry point.
-	/// </summary>
-	public class ModEntry : Mod
-	{
-		private ModConfig _config;
+    /// <summary>
+    /// The mod entry point.
+    /// </summary>
+    public class ModEntry : Mod
+    {
+        private ModConfig _config;
 
-		private readonly HashSet<Bush> _shakenBushes = new();
+        private readonly HashSet<Bush> _shakenBushes = new();
 
-		private int _treesShaken;
-		private int _fruitTressShaken;
+        private int _treesShaken;
+        private int _fruitTressShaken;
 
         private PerScreen<Point> _lastPlayerPos = new();
         private PerScreen<int> _lastPlayerMag = new();
 
-		/// <summary>
-		/// The mod entry point, called after the mod is first loaded.
-		/// </summary>
-		/// <param name="helper">Provides simplified APIs for writing mods.</param>
-		public override void Entry(IModHelper helper)
-		{
-			I18n.Init(helper.Translation);
-			_config = helper.ReadConfig<ModConfig>();
+        /// <summary>
+        /// The mod entry point, called after the mod is first loaded.
+        /// </summary>
+        /// <param name="helper">Provides simplified APIs for writing mods.</param>
+        public override void Entry(IModHelper helper)
+        {
+            I18n.Init(helper.Translation);
+            _config = helper.ReadConfig<ModConfig>();
 
-			helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
-			helper.Events.GameLoop.DayEnding += OnDayEnding;
-			helper.Events.Input.ButtonsChanged += OnButtonsChanged;
-			helper.Events.GameLoop.GameLaunched += (_,_) => _config.RegisterModConfigMenu(helper, ModManifest);
-		}
+            helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
+            helper.Events.GameLoop.DayEnding += OnDayEnding;
+            helper.Events.Input.ButtonsChanged += OnButtonsChanged;
+            helper.Events.GameLoop.GameLaunched += (_, _) => _config.RegisterModConfigMenu(helper, ModManifest);
+        }
 
-		private void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
-		{
-			if (!Context.IsWorldReady) return;
-			if (!_config.IsShakerActive || (!_config.ShakeRegularTrees && !_config.ShakeFruitTrees && !_config.ShakeBushes)) return;
-			if (Game1.currentLocation == null || Game1.player == null) return;
-			if (Game1.CurrentEvent != null && (!Game1.CurrentEvent.playerControlSequence || !Game1.CurrentEvent.canPlayerUseTool())) return;
+        private void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
+        {
+            if (!Context.IsWorldReady) return;
+            if (!_config.IsShakerActive || (!_config.ShakeRegularTrees && !_config.ShakeFruitTrees && !_config.ShakeBushes)) return;
+            if (Game1.currentLocation == null || Game1.player == null) return;
+            if (Game1.CurrentEvent != null && (!Game1.CurrentEvent.playerControlSequence || !Game1.CurrentEvent.canPlayerUseTool())) return;
             if (Game1.activeClickableMenu is not null) return;
 
-			var playerTileLocationPoint = Game1.player.getTileLocationPoint();
-			var playerMagnetism = Game1.player.GetAppliedMagneticRadius();
+            var playerTileLocationPoint = Game1.player.getTileLocationPoint();
+            var playerMagnetism = Game1.player.GetAppliedMagneticRadius();
 
             if (playerTileLocationPoint == _lastPlayerPos.Value && playerMagnetism == _lastPlayerMag.Value)
                 return;
@@ -59,7 +59,7 @@ namespace AutoShaker
             _lastPlayerPos.Value = playerTileLocationPoint;
             _lastPlayerMag.Value = playerMagnetism;
 
-			var radius = _config.UsePlayerMagnetism ? playerMagnetism / Game1.tileSize : _config.ShakeDistance;
+            var radius = _config.UsePlayerMagnetism ? playerMagnetism / Game1.tileSize : _config.ShakeDistance;
 
             foreach (Vector2 vec in GetTilesToCheck(playerTileLocationPoint, radius))
             {
@@ -120,74 +120,71 @@ namespace AutoShaker
                 }
             }
 
-			if (_config.ShakeBushes)
-			{
-				foreach (var feature in Game1.player.currentLocation.largeTerrainFeatures)
-				{
-					if (feature is not Bush bush) continue;
-					var location = bush.tilePosition;
+            if (_config.ShakeBushes)
+            {
+                foreach (var feature in Game1.player.currentLocation.largeTerrainFeatures)
+                {
+                    if (feature is not Bush bush) continue;
+                    var location = bush.tilePosition;
 
                     if (!IsInShakeRange(playerTileLocationPoint, location, radius)) continue;
                     if (_shakenBushes.Contains(bush)) continue;
                     TryShakeBush(bush);
                 }
             }
-                    }
+        }
+
+        private void OnDayEnding(object sender, DayEndingEventArgs e)
+        {
+            if (_config.IsShakerActive)
+            {
+                StringBuilder statMessage = new(Utility.getDateString());
+                statMessage.Append(':');
+
+                if (_treesShaken == 0 && _fruitTressShaken == 0 && _shakenBushes.Count == 0)
+                {
+                    statMessage.Append("Nothing shaken today.");
+                }
+                else
+                {
+
+                    if (_config.ShakeRegularTrees) statMessage.Append($"\n\t[{_treesShaken}] Trees shaken");
+                    if (_config.ShakeFruitTrees) statMessage.Append($"\n\t[{_fruitTressShaken}] Fruit Trees shaken");
+                    if (_config.ShakeBushes) statMessage.Append($"\n\t[{_shakenBushes.Count}] Bushes shaken");
+
+                    Monitor.Log("Resetting daily counts...");
+                    _shakenBushes.Clear();
+                    _treesShaken = 0;
+                    _fruitTressShaken = 0;
+                }
+
+                Monitor.Log(statMessage.ToString(), LogLevel.Info);
+            }
+            else
+            {
+                Monitor.Log("AutoShaken is deactivated; nothing was nor will be shaken until it is reactivated.", LogLevel.Warn);
+            }
+        }
+
+        private void OnButtonsChanged(object sender, ButtonsChangedEventArgs e)
+        {
+            if (Game1.activeClickableMenu == null)
+            {
+                if (_config.ToggleShaker.JustPressed())
+                {
+                    _config.IsShakerActive = !_config.IsShakerActive;
+                    Task.Run(() => Helper.WriteConfig(_config)).ContinueWith((t) =>
+                        this.Monitor.Log(t.Status == TaskStatus.RanToCompletion
+                            ? "Config saved successfully!"
+                            : $"Saving config unsuccessful {t.Status}"));
+
+                    var message = "AutoShaker has been " + (_config.IsShakerActive ? "ACTIVATED" : "DEACTIVATED");
+
+                    Monitor.Log(message, LogLevel.Info);
+                    Game1.addHUDMessage(new HUDMessage(message, null));
                 }
             }
-		}
-
-		private void OnDayEnding(object sender, DayEndingEventArgs e)
-		{
-			if (_config.IsShakerActive)
-			{
-				StringBuilder statMessage = new(Utility.getDateString());
-				statMessage.Append(':');
-
-				if (_treesShaken == 0 && _fruitTressShaken == 0 && _shakenBushes.Count == 0)
-				{
-					statMessage.Append("Nothing shaken today.");
-				}
-				else
-				{
-
-					if (_config.ShakeRegularTrees) statMessage.Append($"\n\t[{_treesShaken}] Trees shaken");
-					if (_config.ShakeFruitTrees) statMessage.Append($"\n\t[{_fruitTressShaken}] Fruit Trees shaken");
-					if (_config.ShakeBushes) statMessage.Append($"\n\t[{_shakenBushes.Count}] Bushes shaken");
-
-					Monitor.Log("Resetting daily counts...");
-					_shakenBushes.Clear();
-					_treesShaken = 0;
-					_fruitTressShaken = 0;
-				}
-
-				Monitor.Log(statMessage.ToString(), LogLevel.Info);
-			}
-			else
-			{
-				Monitor.Log("AutoShaken is deactivated; nothing was nor will be shaken until it is reactivated.", LogLevel.Warn);
-			}
-		}
-
-		private void OnButtonsChanged(object sender, ButtonsChangedEventArgs e)
-		{
-			if (Game1.activeClickableMenu == null)
-			{
-				if (_config.ToggleShaker.JustPressed())
-				{
-					_config.IsShakerActive = !_config.IsShakerActive;
-					Task.Run(() => Helper.WriteConfig(_config)).ContinueWith((t) =>
-						this.Monitor.Log(t.Status == TaskStatus.RanToCompletion
-							? "Config saved successfully!"
-							: $"Saving config unsuccessful {t.Status}"));
-
-					var message = "AutoShaker has been " + (_config.IsShakerActive ? "ACTIVATED" : "DEACTIVATED");
-
-					Monitor.Log(message, LogLevel.Info);
-					Game1.addHUDMessage(new HUDMessage(message, null));
-				}
-			}
-		}
+        }
 
         private void TryShakeBush(Bush bush)
         {
@@ -200,16 +197,16 @@ namespace AutoShaker
             }
         }
 
-		private static bool IsInShakeRange(Point playerLocation, Vector2 bushLocation, int radius)
-			=> Math.Abs(bushLocation.X - playerLocation.X) <= radius && Math.Abs(bushLocation.Y - playerLocation.Y) <= radius;
+        private static bool IsInShakeRange(Point playerLocation, Vector2 bushLocation, int radius)
+            => Math.Abs(bushLocation.X - playerLocation.X) <= radius && Math.Abs(bushLocation.Y - playerLocation.Y) <= radius;
 
-		private static IEnumerable<Vector2> GetTilesToCheck(Point playerLocation, int radius)
-		{
-			for (int x = playerLocation.X - radius; x <= playerLocation.X + radius; x++)
-				for (int y = playerLocation.Y - radius; y <= playerLocation.Y + radius; y++)
-					yield return new Vector2(x, y);
+        private static IEnumerable<Vector2> GetTilesToCheck(Point playerLocation, int radius)
+        {
+            for (int x = playerLocation.X - radius; x <= playerLocation.X + radius; x++)
+                for (int y = playerLocation.Y - radius; y <= playerLocation.Y + radius; y++)
+                    yield return new Vector2(x, y);
 
-			yield break;
-		}
-	}
+            yield break;
+        }
+    }
 }
