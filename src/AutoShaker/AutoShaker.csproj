@@ -4,9 +4,6 @@
     <Version>1.5.0</Version>
   </PropertyGroup>
 
-  <PropertyGroup>
-    <TranslationClassBuilder_CreateBackup>true</TranslationClassBuilder_CreateBackup>
-  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.0.1" />
     <PackageReference Include="Pathoschild.Stardew.ModTranslationClassBuilder" Version="2.0.1" />
